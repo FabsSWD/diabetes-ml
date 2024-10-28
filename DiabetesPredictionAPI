@@ -1,27 +1,55 @@
 from flask import Flask, request, jsonify
 from tensorflow.keras.models import load_model
 import pandas as pd
-import numpy as np
+import joblib
+import logging
 import os
+import sys
+import io
 
+# Configuración de codificación UTF-8 en la salida de la consola
+sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+# Configura la app
 app = Flask(__name__)
 
-# Ruta del modelo guardado
-model_save_path = "/content/drive/MyDrive/Python/MLDiabetes/diabetes_prediction_model.keras"
+# Configuración de logging en UTF-8
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
+# Carga el modelo y los preprocesadores
+model_save_path = "logistic_regression_model.keras"
 loaded_model = load_model(model_save_path)
+scaler = joblib.load("scaler.pkl")
+imputer = joblib.load("imputer.pkl")
 
 # Ruta para la predicción
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
+        # Recibe los datos de entrada
         input_data = request.json['input_data']
         input_df = pd.DataFrame([input_data], columns=['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age'])
-        scaled_input = scaler.transform(input_df.to_numpy())
-        scaled_input = imputer.transform(scaled_input)
-        prediction = loaded_model.predict(scaled_input)[0][0] >= 0.5
+
+        # Imputa y escala
+        imputed_input = imputer.transform(input_df)
+        scaled_input = scaler.transform(imputed_input)
+
+        # Predicción
+        prediction = int((loaded_model.predict(scaled_input) >= 0.5).astype(bool)[0][0])
+        
+        # Devuelve la predicción de manera simple con jsonify
         return jsonify({'prediction': prediction})
+
     except Exception as e:
-        return jsonify({'error': str(e)})
+        # Log detallado del error y conversión de e a str
+        print("Error en la predicción:", e)
+        return jsonify({'error': 'Ocurrió un error en el procesamiento de la predicción: ' + str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
