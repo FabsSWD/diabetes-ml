@@ -137,7 +137,7 @@ curl -X POST http://localhost:5000/predict -H "Content-Type: application/json" -
 
 ```json
 {
-  "diabetes_prediction": "positive" // or "negative"
+  "diabetes_prediction": "1" // or "0"
 }
 ```
 
